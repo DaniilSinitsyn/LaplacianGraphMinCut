@@ -7,22 +7,24 @@
 #include <stack>
 #include <vector>
 
-#include <Eigen/Dense>
 #include <Eigen/Eigen>
-#include <Eigen/SPQRSupport>
+
+#include "cusp_cg.h"
 
 struct Vert {
   int n;
 };
 
 struct Edge {
+  Edge(int v1, int v2, float cap) : v1(v1), v2(v2), cap(cap) {}
   int v1, v2;
   float cap;
 };
 
 struct Graph {
   Graph(const int ver_n) : verts_number(ver_n + 2), maxflow_upper_limit(0.0) {
-    potentials.resize(verts_number);
+    potentials_.resize(verts_number);
+    potentials_.setZero();
     b = Eigen::VectorXf::Zero(ver_n + 2);
     b(0) = 1;
     b(verts_number - 1) = -1;
@@ -59,19 +61,21 @@ struct Graph {
       float f = knownFlowCut(center);
       std::cout << flow_pair.first << ' ' << flow_pair.second << " - " << f
                 << "(" << center << ")" << '\n';
-      return f;
       if (f >= 0) {
         good = center;
         flow_pair.second = center;
+        potentials_backup = potentials;
       } else {
         break;
       }
+
+      return f;
     }
     std::cout << cut_thresh << std::endl;
-    return knownFlowCut(good);
+    return good;
   }
   inline bool IsNodeOnSrcSide(int n) const {
-    return potentials(n) >= cut_thresh - 0.05;
+    return potentials_backup(n) >= cut_thresh - 0.05;
   }
 
 private:
@@ -125,7 +129,7 @@ private:
       std::cout << min_cut_capacity << ' ' << cut_thresh << std::endl;
       if (min_cut_capacity < 0)
         return -1;
-      if (good_cap < maxFlow / (1 - 7 * eps))
+      if (min_cut_capacity < maxFlow / (1 - 7 * eps))
         return good_cap;
     }
     return -1.0;
@@ -138,7 +142,6 @@ private:
       B.insert(edges[i].v1, i) = -1;
       B.insert(edges[i].v2, i) = 1;
     }
-    B.makeCompressed();
 
     Eigen::VectorXf resistances(edges.size());
     for (size_t i = 0; i < edges.size(); ++i) {
@@ -146,13 +149,24 @@ private:
     }
     SpMat A = B * resistances.asDiagonal() * SpMat(B.transpose());
     A.makeCompressed();
-    Eigen::VectorXf x = Eigen::VectorXf::Zero(A.cols());
-    x(0) = 1;
-    x(1) = -1;
-    cg.compute(A);
 
-    potentials = cg.solveWithGuess(maxFlow * b, x);
+#if 1
+    potentials_ = cusp_cg_solve(A, maxFlow * b);
+#else
+    static int ii = 0;
+    if (ii == 0) {
+      cg.analyzePattern(A);
+      ii++;
+    }
+    cg.factorize(A);
+    cg.setMaxIterations(1000);
+    cg.setTolerance(1e-6);
+
+    potentials_ = cg.solveWithGuess(maxFlow * b, potentials_);
     std::cout << cg.error() << " " << cg.iterations() << std::endl;
+#endif
+    potentials = potentials_;
+
     flow = resistances.array() * (SpMat(B.transpose()) * potentials).array();
 
     auto kek = (B * flow).eval();
@@ -160,8 +174,10 @@ private:
               << kek.segment(1, verts_number - 2).norm() << std::endl;
   }
 
-  using SpMat = Eigen::SparseMatrix<float, Eigen::ColMajor>;
-  Eigen::ConjugateGradient<SpMat, Eigen::Upper | Eigen::Lower> cg;
+  Eigen::ConjugateGradient<SpMat, Eigen::Upper | Eigen::Lower,
+                           Eigen::DiagonalPreconditioner<float>>
+      cg;
+
   std::vector<Edge> edges;
 
   const int verts_number;
@@ -171,6 +187,9 @@ private:
   Eigen::VectorXf weights;
   Eigen::VectorXf flow;
   Eigen::VectorXf potentials;
+  Eigen::VectorXf potentials_backup;
+
+  Eigen::VectorXf potentials_;
 
   float maxflow_upper_limit;
   float source_sum, terminal_sum;

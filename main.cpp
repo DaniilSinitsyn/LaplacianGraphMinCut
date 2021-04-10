@@ -9,6 +9,9 @@ int main() {
 
   std::ifstream file("/home/little/cscenter/practice/last_sem/datasets/"
                      "herzjesu/openmvg/openvms/graph.txt");
+
+  // std::ifstream file(
+  //    "/home/little/cscenter/practice/last_sem/openMVS_build/bin/graph.txt");
   for (int i = 0; i < verts + edges; ++i) {
     char c;
     file >> c;
