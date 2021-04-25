@@ -34,7 +34,7 @@ Eigen::VectorXf cusp_cg_solve(const SpMat &A_, const Eigen::VectorXf &b_) {
   cusp::array1d<float, cusp::device_memory> x_gpu(A.num_rows, 0);
   cusp::array1d<float, cusp::device_memory> b_gpu(b);
 
-  cusp::monitor<float> monitor(b_gpu, 2000, 1e-6, 1e-2, true);
+  cusp::monitor<float> monitor(b_gpu, 2000, 1e-3, b_[0] / b_.size(), true);
 
   cusp::precond::diagonal<float, cusp::device_memory> M(A_gpu);
 

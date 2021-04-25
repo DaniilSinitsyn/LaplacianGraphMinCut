@@ -1,15 +1,19 @@
 #ifndef GRAPH_HPP
 #define GRAPH_HPP
 
+#include <fstream>
 #include <iostream>
+#include <memory>
 #include <random>
 #include <ranges>
 #include <stack>
 #include <vector>
 
-#include <Eigen/Eigen>
-
+#include "cheb.hpp"
 #include "cusp_cg.h"
+#include <CombBLAS/CombBLAS.h>
+#include <Eigen/Eigen>
+#include <ligmg/ligmg.hpp>
 
 struct Vert {
   int n;
@@ -25,6 +29,7 @@ struct Graph {
   Graph(const int ver_n) : verts_number(ver_n + 2), maxflow_upper_limit(0.0) {
     potentials_.resize(verts_number);
     potentials_.setZero();
+    potentials_backup.resize(verts_number);
     b = Eigen::VectorXf::Zero(ver_n + 2);
     b(0) = 1;
     b(verts_number - 1) = -1;
@@ -68,8 +73,6 @@ struct Graph {
       } else {
         break;
       }
-
-      return f;
     }
     std::cout << cut_thresh << std::endl;
     return good;
@@ -77,6 +80,8 @@ struct Graph {
   inline bool IsNodeOnSrcSide(int n) const {
     return potentials_backup(n) >= cut_thresh - 0.05;
   }
+
+  std::shared_ptr<combblas::CommGrid> grid;
 
 private:
   float knownFlowCut(float maxFlow) {
@@ -134,15 +139,25 @@ private:
     }
     return -1.0;
   }
-
+#define alg 1
   void solveSparse(float maxFlow) {
     SpMat B(verts_number, edges.size());
     B.reserve(Eigen::VectorXi::Constant(edges.size(), 2));
+
+    std::ofstream kekkek("neighs");
+    std::ofstream b_mat("B_matr.dat");
+
     for (size_t i = 0; i < edges.size(); ++i) {
+      b_mat << edges[i].v1 + 1 << ' ' << i + 1 << ' ' << -1 << '\n';
+      b_mat << edges[i].v2 + 1 << ' ' << i + 1 << ' ' << 1 << '\n';
+
       B.insert(edges[i].v1, i) = -1;
       B.insert(edges[i].v2, i) = 1;
-    }
 
+      kekkek << edges[i].v1 << '\n';
+      kekkek << edges[i].v2 << '\n';
+    }
+    b_mat.close();
     Eigen::VectorXf resistances(edges.size());
     for (size_t i = 0; i < edges.size(); ++i) {
       resistances(i) = edges[i].cap * edges[i].cap / weights(i);
@@ -150,9 +165,28 @@ private:
     SpMat A = B * resistances.asDiagonal() * SpMat(B.transpose());
     A.makeCompressed();
 
-#if 1
+#if alg == 0
+
     potentials_ = cusp_cg_solve(A, maxFlow * b);
-#else
+#elif alg == 1
+    std::ofstream matrix_export("A_matr.dat");
+    std::ofstream matrix_export_b("b_vec.dat");
+
+    for (int k = 0; k < A.outerSize(); ++k) {
+      for (SpMat::InnerIterator it(A, k); it; ++it) {
+        matrix_export << (it.row() + 1) << ' ' << (it.col() + 1) << ' '
+                      << it.value() << '\n';
+      }
+    }
+
+    for (int i = 0; i < b.size(); ++i) {
+      matrix_export_b << (maxFlow * b(i)) << '\n';
+    }
+    kekkek.close();
+    matrix_export.close();
+    matrix_export_b.close();
+
+    exit(336);
     static int ii = 0;
     if (ii == 0) {
       cg.analyzePattern(A);
@@ -164,6 +198,55 @@ private:
 
     potentials_ = cg.solveWithGuess(maxFlow * b, potentials_);
     std::cout << cg.error() << " " << cg.iterations() << std::endl;
+#elif alg == 2
+    std::vector<int> lrow_ids, lcol_ids;
+    std::vector<double> lvals;
+    lrow_ids.reserve(A.nonZeros());
+    lcol_ids.reserve(A.nonZeros());
+    lvals.reserve(A.nonZeros());
+
+    for (int k = 0; k < A.outerSize(); ++k)
+      for (SpMat::InnerIterator it(A, k); it; ++it) {
+        lvals.push_back(it.value());
+        lrow_ids.push_back(it.row());
+        lcol_ids.push_back(it.col());
+      }
+
+    combblas::FullyDistVec<int, int> drows(lrow_ids, grid);
+    combblas::FullyDistVec<int, int> dcols(lcol_ids, grid);
+    combblas::FullyDistVec<double, double> dvals(lvals, grid);
+
+    typedef combblas::SpDCCols<int, double> DCCols;
+    typedef combblas::SpParMat<int, double, DCCols> MPI_DCCols;
+
+    MPI_DCCols A_combblas(A.rows(), A.cols(), drows, dcols, dvals, false);
+    combblas::DenseParVec<int, double> rhs(grid, b.size());
+
+    Eigen::VectorXf new_b = maxFlow * b - A * potentials_;
+    for (int i = 0; i < b.size(); ++i) {
+      rhs.SetElement(i, new_b(i));
+    }
+    ligmg::Options op;
+    op.verbose_solve = true;
+    op.verbose = true;
+    op.test_ligmg = false;
+    op.iters = 2000;
+    ligmg::Solver<int, double, DCCols> solver(A_combblas, op);
+    auto result = solver.solve(rhs);
+    std::cout << result.rel_residual() << std::endl;
+    auto solution = result.solution;
+
+    for (int i = 0; i < b.size(); ++i) {
+      potentials_(i) += solution.GetElement(i);
+    }
+#elif alg == 3
+    float maxEig = maxFlow;
+    std::cout << maxEig << std::endl;
+    ;
+    Eigen::DiagonalPreconditioner<float> diag(A);
+    int iters = 2000;
+    float tol = 1e-6;
+    CHEBY(A, potentials_, (maxFlow * b).eval(), diag, iters, tol, 0.0f, maxEig);
 #endif
     potentials = potentials_;
 
