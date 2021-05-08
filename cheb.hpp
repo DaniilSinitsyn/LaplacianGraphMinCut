@@ -44,9 +44,9 @@ int CHEBY(const Matrix &A, Vector &x, const Vector &b, const Preconditioner &M,
 
   for (int i = 1; i <= max_iter; i++) {
     z = M.solve(r); // apply preconditioner
-
     if (i == 1) {
       p = z;
+
       alpha = 2.0 / d;
     } else {
       beta = c * alpha / 2.0; // calculate new beta
@@ -64,6 +64,8 @@ int CHEBY(const Matrix &A, Vector &x, const Vector &b, const Preconditioner &M,
       max_iter = i;
       return 0; // convergence
     }
+
+    std::cout << i << ' ' << resid << std::endl;
   }
 
   tol = resid;

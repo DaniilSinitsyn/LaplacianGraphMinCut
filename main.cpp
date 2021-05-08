@@ -2,25 +2,17 @@
 #include <chrono>
 #include <fstream>
 #include <memory>
-int main(int argc, char **argv) {
-  int world_size, world_rank;
-  MPI_Init(&argc, &argv);
-  MPI_Comm_size(MPI_COMM_WORLD, &world_size);
-  MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
-  MPI_Comm world = MPI_COMM_WORLD;
-  std::shared_ptr<combblas::CommGrid> grid =
-      std::make_shared<combblas::CommGrid>(MPI_COMM_WORLD, 1, 1);
+int main() {
 
-  int verts = 532661, edges = 1065322;
-  // int verts = 11537960, edges = 23075920;
+  // int verts = 532661, edges = 1065322;
+  int verts = 11537960, edges = 23075920;
   Graph g(verts);
   Eigen::setNbThreads(8);
-  g.grid = grid;
-  // std::ifstream file("/home/little/cscenter/practice/last_sem/datasets/"
-  //                   "herzjesu/openmvg/openvms/graph.txt");
+  std::ifstream file("/home/little/cscenter/practice/last_sem/datasets/"
+                     "herzjesu/openmvg/openvms/graph.txt");
 
-  std::ifstream file(
-      "/home/little/cscenter/practice/last_sem/openMVS_build/bin/graph.txt");
+  // std::ifstream file(
+  //    "/home/little/cscenter/practice/last_sem/openMVS_build/bin/graph.txt");
   for (int i = 0; i < verts + edges; ++i) {
     char c;
     file >> c;
