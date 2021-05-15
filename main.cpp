@@ -4,15 +4,19 @@
 #include <memory>
 int main() {
 
-  // int verts = 532661, edges = 1065322;
+#if 1
+  int verts = 532661, edges = 1065322;
+  std::ifstream file(
+      "/home/little/cscenter/practice/last_sem/openMVS_build/bin/graph.txt");
+#else
   int verts = 11537960, edges = 23075920;
-  Graph g(verts);
-  Eigen::setNbThreads(8);
   std::ifstream file("/home/little/cscenter/practice/last_sem/datasets/"
                      "herzjesu/openmvg/openvms/graph.txt");
+#endif
+  Graph g(verts);
+  omp_set_num_threads(8);
+  Eigen::setNbThreads(8);
 
-  // std::ifstream file(
-  //    "/home/little/cscenter/practice/last_sem/openMVS_build/bin/graph.txt");
   for (int i = 0; i < verts + edges; ++i) {
     char c;
     file >> c;

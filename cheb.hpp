@@ -44,6 +44,8 @@ int CHEBY(const Matrix &A, Vector &x, const Vector &b, const Preconditioner &M,
 
   for (int i = 1; i <= max_iter; i++) {
     z = M.solve(r); // apply preconditioner
+    z = z.array() - z.mean();
+
     if (i == 1) {
       p = z;
 

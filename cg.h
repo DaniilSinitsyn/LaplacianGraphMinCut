@@ -20,7 +20,7 @@
 //*****************************************************************
 
 template <class Matrix, class Vector, class Preconditioner, class Real>
-int CG(const Matrix &A, Vector &x, const Vector &b, const Preconditioner &M,
+int CG(const Matrix &A, Vector &x, const Vector &b, Preconditioner &M,
        int &max_iter, Real &tol) {
   Real resid;
   Vector p, z, q;
@@ -38,10 +38,8 @@ int CG(const Matrix &A, Vector &x, const Vector &b, const Preconditioner &M,
     return 0;
   }
 
-  Real old_resid = resid;
   for (int i = 1; i <= max_iter; i++) {
     z = M.solve(r);
-
     rho(0) = r.dot(z); // dot(r, z);
 
     if (i == 1)
@@ -58,13 +56,12 @@ int CG(const Matrix &A, Vector &x, const Vector &b, const Preconditioner &M,
     x += alpha(0) * p;
     r -= alpha(0) * q;
 
-    if ((resid = r.norm() / normb) <= tol || abs(resid - old_resid) < 1e-8) {
+    if ((resid = r.norm() / normb) <= tol) {
       tol = resid;
       max_iter = i;
       return 0;
     }
-    old_resid = resid;
-
+    std::cout << i << ' ' << (A * x - b).norm() << std::endl;
     rho_1(0) = rho(0);
   }
 
