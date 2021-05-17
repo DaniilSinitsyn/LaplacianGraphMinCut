@@ -61,7 +61,6 @@ int CG(const Matrix &A, Vector &x, const Vector &b, Preconditioner &M,
       max_iter = i;
       return 0;
     }
-    std::cout << i << ' ' << (A * x - b).norm() << std::endl;
     rho_1(0) = rho(0);
   }
 

@@ -11,23 +11,33 @@ namespace Eigen {
 namespace internal {
 template <>
 struct traits<GraphLaplacian>
-    : public Eigen::internal::traits<Eigen::SparseMatrix<double>> {};
+    : public Eigen::internal::traits<Eigen::SparseMatrix<float_type>> {};
 } // namespace internal
 } // namespace Eigen
 
 struct GraphLaplacianRow {
-  GraphLaplacianRow(const Eigen::VectorXd &coeffs,
-                    const std::vector<long> &idxs)
+  GraphLaplacianRow(const std::vector<double> &coeffs,
+                    const std::vector<int> &idxs)
       : coeffs(coeffs), idxs(idxs) {}
-  Eigen::VectorXd coeffs;
-  std::vector<long> idxs;
+  GraphLaplacianRow(int n) {
+    coeffs = {0};
+    idxs = {n};
+  }
+
+  void push(int i, double cap) {
+    idxs.push_back(i);
+    coeffs.push_back(cap);
+    coeffs[0] += cap;
+  }
+  std::vector<double> coeffs;
+  std::vector<int> idxs;
 };
 
 class GraphLaplacian : public Eigen::EigenBase<GraphLaplacian> {
 public:
   // Required typedefs, constants, and method:
-  typedef double Scalar;
-  typedef double RealScalar;
+  typedef float_type Scalar;
+  typedef float_type RealScalar;
   typedef int StorageIndex;
   enum {
     ColsAtCompileTime = Eigen::Dynamic,
@@ -41,7 +51,7 @@ public:
     DummyIterator() {}
     DummyIterator(const GraphLaplacian &, Index) {}
     DummyIterator operator++() { return DummyIterator(); }
-    double value() { return 0; }
+    float_type value() { return 0; }
     Index index() { return 0; }
     operator bool() { return false; }
   };
@@ -54,13 +64,17 @@ public:
         *this, x.derived());
   }
 
-  GraphLaplacian(const std::vector<GraphLaplacianRow> &rows_)
-      : rows_(rows_), n(this->rows_.size()) {}
+  GraphLaplacian(int n) : n(n) {
+    rows_.reserve(n);
+    for (int i = 0; i < n; ++i) {
+      rows_.emplace_back(i);
+    }
+  }
 
   int outerSize() const { return n; }
   GraphLaplacian adjoint() const { return *this; }
-  Eigen::VectorXd col(int j) const {
-    Eigen::VectorXd ans(n);
+  VecX col(int j) const {
+    VecX ans(n);
     ans.setZero();
     ans(j) = 1;
     return (*this) * ans;
@@ -116,7 +130,7 @@ public:
     tbb::parallel_for(tbb::blocked_range<size_t>(0, diagonal.rows()),
                       [&](auto r) {
                         for (auto i = r.begin(); i < r.end(); ++i)
-                          diagonal(i) = g.rows_[i].coeffs(0);
+                          diagonal(i) = g.rows_[i].coeffs[0];
                       });
 
     evaluated = true;
@@ -129,20 +143,20 @@ public:
   }
 
   template <typename Rhs> inline const Rhs solve(const Rhs &b) const {
-    Eigen::VectorXd ans = b;
+    VecX ans = b;
     tbb::parallel_for(tbb::blocked_range<size_t>(0, diagonal.rows()),
                       [&](auto r) {
                         for (auto i = r.begin(); i < r.end(); ++i)
                           ans(i) /= diagonal(i);
                       });
-    return ans.array() - ans.mean();
+    return ans;
   }
 
   Eigen::ComputationInfo info() { return Eigen::Success; }
 
 private:
   bool evaluated;
-  Eigen::VectorXd diagonal;
+  VecX diagonal;
 };
 
 #endif // GRAPHLALPLACIAN_HPP
