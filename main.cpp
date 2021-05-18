@@ -8,14 +8,13 @@ int main(int argc, char **argv) {
     return 0;
   }
   int N = std::atoi(argv[1]);
-#if 1
+#if 0
   int verts = 532661, edges = 1065322;
   std::ifstream file(
-      "/home/little/cscenter/practice/last_sem/openMVS_build/bin/graph.txt");
+      "graph.txt");
 #else
   int verts = 11537960, edges = 23075920;
-  std::ifstream file("/home/little/cscenter/practice/last_sem/datasets/"
-                     "herzjesu/openmvg/openvms/graph.txt");
+  std::ifstream file("herzjesu/graph.txt");
 #endif
   Eigen::initParallel();
   Graph g(verts);
@@ -48,21 +47,5 @@ int main(int argc, char **argv) {
                                                                      start)
                    .count()
             << std::endl;
-  int src = 0, term = 0;
-  for (int v = 0; v < verts + 2; ++v) {
-    if (g.IsNodeOnSrcSide(v))
-      src++;
-    else
-      term++;
-  }
-
-  std::ofstream save("src.txt");
-  save << src << std::endl;
-  for (int v = 1; v < verts + 1; ++v) {
-    if (g.IsNodeOnSrcSide(v))
-      save << (v - 1) << std::endl;
-  }
-  std::cout << "source : " << src << ", term : " << term << std::endl;
-
   return 0;
 }

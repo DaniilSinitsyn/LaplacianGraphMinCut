@@ -194,7 +194,7 @@ private:
 #if 1
     {
       Eigen::DiagonalPreconditioner<float_type> diag(A);
-      CG(A, potentials, (b).cast<float_type>().eval(), diag, max_iter, tol);
+      CG(A, potentials, b, diag, max_iter, tol);
     }
 #else
 
